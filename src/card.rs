@@ -1,5 +1,5 @@
-use std::fmt::{self, Display};
 use rand::prelude::*;
+use std::fmt::{self, Display};
 
 
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
@@ -73,7 +73,8 @@ pub trait CardRepr {
 
 impl Display for Card {
     fn fmt(&self, fmt: &mut ::std::fmt::Formatter<'_>) -> ::std::result::Result<(), fmt::Error> {
-        write!(fmt, "{}{}", self.1, self.0)
+        // write!(fmt, "{}{}", self.1, self.0)
+        write!(fmt, "{}", self.to_html())
     }
 }
 
@@ -81,10 +82,10 @@ impl Display for Suit {
     fn fmt(&self, fmt: &mut ::std::fmt::Formatter<'_>) -> ::std::result::Result<(), fmt::Error> {
         use Suit::*;
         match self {
-            Heart => write!(fmt, "h"),
-            Club => write!(fmt, "c"),
-            Spade => write!(fmt, "s"),
-            Diamond => write!(fmt, "d")
+            Heart => write!(fmt, "♥"),
+            Club => write!(fmt, "♣"),
+            Spade => write!(fmt, "♠"),
+            Diamond => write!(fmt, "♦")
         }
     }
 }
@@ -170,6 +171,28 @@ impl Rank {
             King =>     11,
             Ace =>      12,
         }
+    }
+}
+impl Card {
+    pub fn to_html(&self) -> String {
+        use Suit::*;
+        let suit = match self.0 {
+            Spade => "spades",
+            Club => "clubs",
+            Diamond => "diams",
+            Heart => "hearts",
+        };
+        let val = format!("{}", self.1);
+        format!("
+            <div class='card rank-{} {}'>
+                <span class='rank'>{}</span>
+                <span class='suit'>&{};</span>
+            </div>",
+            val,
+            suit,
+            val,
+            suit,
+        )
     }
 }
 

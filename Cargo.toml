@@ -4,4 +4,5 @@ version = "0.1.0"
 authors = ["ricky han <github@rickyhan.com>"]
 
 [dependencies]
-rand = "0.5.5"
+rand = { version = "0.5", features = ["stdweb"] }
+stdweb = "0.4.7"

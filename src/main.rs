@@ -1,4 +1,13 @@
+#![feature(custom_attribute)]
 #![feature(vec_remove_item)]
+
+extern crate rand;
+#[macro_use]
+extern crate stdweb;
+
+use rand::prelude::*;
+use stdweb::web::event::ClickEvent;
+use stdweb::web::{document, IParentNode, IEventTarget};
 
 const SIZES : [f32; 10] = [
     100.,
@@ -25,10 +34,6 @@ const BETS: [f32; 10] = [
     0.8,
     1.,
 ];
-
-
-extern crate rand;
-use rand::prelude::*;
 
 pub mod card;
 pub mod evaluate;
@@ -201,6 +206,7 @@ impl Pot {
 
 struct Scenario {
     pot: Pot,
+    bet: f32,
     flop: Option<Flop>,
     hand: Option<Hand>,
     turn: Option<Card>,
@@ -208,11 +214,25 @@ struct Scenario {
     turn_equity: Option<f32>,
 }
 
+
+fn append_txt(txt: &str) {
+    js! {
+        document.querySelector("#txtbox").innerHTML += @{txt} + "<br />";
+    }
+}
+
+fn clear_txt() {
+    js! {
+        document.querySelector("#txtbox").innerHTML = "";
+    }
+}
+
 impl Scenario {
     fn new() -> Self {
         let pot = Pot::rand_pot();
         let mut ret = Self {
             pot,
+            bet: 0.,
             flop: None,
             hand: None,
             equity: None,
@@ -233,35 +253,42 @@ impl Scenario {
     }
 
     fn flop(&mut self) {
-        let bet = self.pot.rand_bet();
-        let pot_odds = self.pot.odds(bet);
-        println!("Pot ${}, bet ${}", self.pot.size, bet);
-        println!("Flop: {}", self.flop.unwrap());
-        println!("Hand: {}", self.hand.unwrap());
-        println!("Pot odds: {:.2}, equity: {:.2}", pot_odds, self.equity.unwrap());
+        self.bet = self.pot.rand_bet();
+        append_txt(&format!("Pot ${}, bet ${}", self.pot.size, self.bet));
+        append_txt(&format!("Flop: {}", self.flop.unwrap()));
+        append_txt(&format!("Hand: {}", self.hand.unwrap()));
+        append_txt(&format!("
+        <div class='flop'>
+            <button>Call</button>
+            <button>Fold</button>
+        </div>
+        "));
+    }
 
+    fn answer(&mut self) {
+        let pot_odds = self.pot.odds(self.bet);
+        append_txt(&format!("<div class='answer'>Pot odds: {:.2}, equity: {:.2}</div>", pot_odds, self.equity.unwrap()));
         let eqt = self.turn_equity.unwrap();
-        let potsize = self.pot.size + bet;
-        let ev = potsize * eqt - bet * (1. - eqt);
-        println!("EV = ${:.2} x {:.2} - ${:.2} * {:.2} = {:.2}", potsize, eqt, bet, 1. - eqt, ev);
-        println!("------------------", );
-        self.pot.size += bet * 2.;
+        let potsize = self.pot.size + self.bet;
+        let ev = potsize * eqt - self.bet * (1. - eqt);
+        append_txt(&format!("<div class='answer'>EV = ${:.2} x {:.2} - ${:.2} * {:.2} = {:.2}</div>", potsize, eqt, self.bet, 1. - eqt, ev));
+        self.pot.size += self.bet * 2.;
     }
 
     fn turn(&mut self) {
-        let bet = self.pot.rand_bet();
-        let pot_odds = self.pot.odds(bet);
-        println!("Turn: {}.", self.turn.unwrap());
-        println!("Pot ${:.2}, Bet ${:.2}", self.pot.size, bet);
-        println!("Pot odds: {:.2}, equity: {:.2}", pot_odds, self.turn_equity.unwrap());
-
-        let potsize = self.pot.size + bet;
-        let eqt = self.turn_equity.unwrap();
-        let ev = potsize * eqt - bet * (1. - eqt);
-        println!("EV = ${:.2} x {:.2} - ${:.2} * {:.2} = {:.2}", potsize, eqt, bet, 1. - eqt, ev);
+        self.bet = self.pot.rand_bet();
+        append_txt(&format!("Turn: {}.", self.turn.unwrap()));
+        append_txt(&format!("Pot ${:.2}, Bet ${:.2}", self.pot.size, self.bet));
+        append_txt(&format!("
+            <div class='turn'>
+                <button>Call</button>
+                <button>Fold</button>
+            </div>
+        "));
     }
 
     fn flush_draw(&mut self) {
+        append_txt("Scenario: Flush Draw");
         let mut deck = Deck::new();
         let (flop, hand, turn) = deck.flush_draw().unwrap();
         self.flop = Some(flop);
@@ -272,6 +299,7 @@ impl Scenario {
     }
 
     fn de_straight_draw(&mut self) {
+        append_txt("Scenario: Straight Draw");
         let mut deck = Deck::new();
         let (flop, hand, turn) = deck.de_straight().unwrap();
         self.flop = Some(flop);
@@ -282,6 +310,7 @@ impl Scenario {
     }
 
     fn hole_card(&mut self) {
+        append_txt("Scenario: Straight Draw");
         let mut deck = Deck::new();
         let (flop, hand, turn) = deck.hole_card().unwrap();
         self.flop = Some(flop);
@@ -292,9 +321,39 @@ impl Scenario {
     }
 }
 
+use std::rc::Rc;
+use std::cell::RefCell;
+
+fn remove(selector: &str) {
+    js! {
+        let x = document.querySelector(@{selector});
+        while(x) {x.remove();x = document.querySelector(@{selector}); };
+    };
+
+}
+
 fn main() {
-    let mut s = Scenario::new();
-    s.flop();
-    s.turn();
-    ()
+    stdweb::initialize();
+    let button = document().query_selector( "#new" ).unwrap().unwrap();
+    button.add_event_listener( move |_: ClickEvent| {
+        clear_txt();
+        let s = Rc::new(RefCell::new(Scenario::new()));
+        let s_clone = s.clone();
+        s_clone.borrow_mut().flop();
+        let s_clone = s.clone();
+        let answer_btn = document().query_selector( ".flop" ).unwrap().unwrap();
+        answer_btn.add_event_listener( move |_: ClickEvent| {
+            remove(".flop");
+            s_clone.borrow_mut().answer();
+            s_clone.borrow_mut().turn();
+
+            let sc = s_clone.clone();
+            let ans_btn = document().query_selector( ".turn" ).unwrap().unwrap();
+            ans_btn.add_event_listener( move |_: ClickEvent| {
+                remove(".turn");
+                sc.borrow_mut().answer();
+            });
+        });
+    });
+    stdweb::event_loop();
 }
